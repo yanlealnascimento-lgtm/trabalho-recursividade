@@ -1,50 +1,84 @@
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.Function;
+import java.util.function.IntFunction;
 
 public class ResolvedorDeRecorrencias {
 
-    private static final int FORMA_DIVIDIR = 1;
-    private static final int FORMA_SUBTRAIR = 2;
-    private static final int FORMA_DOIS_RAMOS = 3;
+    private static final int CUSTO_CONSTANTE = RecorrenciaDigitada.CUSTO_CONSTANTE;
+    private static final int CUSTO_LINEAR = RecorrenciaDigitada.CUSTO_LINEAR;
+    private static final int PONTO_DE_PARADA_AO_DIVIDIR = 1;
 
-    private static final int CUSTO_CONSTANTE = 1;
-    private static final int CUSTO_LINEAR = 2;
+    private static final int DIVIDIR_N_LOG_N = 0;
+    private static final int DIVIDIR_POTENCIA_DE_N = 1;
+    private static final int DIVIDIR_N = 2;
+    private static final int DIVIDIR_LOG_N = 3;
+    private static final int DIVIDIR_CONSTANTE = 4;
 
-    private static final int MENOR_VALOR_DE_A = 1;
-    private static final int MENOR_VALOR_DE_B = 2;
-    private static final int MENOR_VALOR_DE_D = 1;
-    private static final int MENOR_VALOR_DE_C = 1;
-    private static final int MENOR_TERMO_DA_FRACAO = 1;
+    private static final int SUBTRAIR_EXPONENCIAL = 0;
+    private static final int SUBTRAIR_N_AO_QUADRADO = 1;
+    private static final int SUBTRAIR_N = 2;
+    private static final int SUBTRAIR_CONSTANTE = 3;
 
     private static final String FORMATO_DO_ROTULO = "  %-24s%s";
     private static final String RECUO_DE_CONTINUACAO = String.format("%26s", "");
+    private static final String[] ROTULOS_DA_SOLUCAO = {"Recorrencia:", "Passo 1 (expansao):", "Passo 2 (forma apos k):",
+            "Passo 3 (achar k):", "Passo 4 (substituir):", "Forma fechada:", "Passo 5 (inducao):", "Comportamento:"};
     private static final String SEM_FORMA_FECHADA = "sem forma fechada simples";
+    private static final String CONFERE = "  ok";
+    private static final String NAO_CONFERE = "  NAO confere";
 
     public static void executar() {
         System.out.println();
-        System.out.println("--- Resolvedor de recorrencias ---");
-        System.out.println("Escolha a forma da recorrencia:");
-        System.out.println(" " + FORMA_DIVIDIR + ") T(n) = a*T(n/b) + f(n)        (dividir o tamanho)");
-        System.out.println(" " + FORMA_SUBTRAIR + ") T(n) = a*T(n-d) + f(n)        (subtrair do tamanho)");
-        System.out.println(" " + FORMA_DOIS_RAMOS + ") T(n) = T(p1/q1 * n) + T(p2/q2 * n) + c*n   (dois ramos)");
-        int forma = Main.lerOpcao("Escolha a forma: ", FORMA_DIVIDIR, FORMA_DOIS_RAMOS);
-        if (forma == FORMA_DIVIDIR) {
-            resolverFormaDividir();
-        } else if (forma == FORMA_SUBTRAIR) {
-            resolverFormaSubtrair();
-        } else {
-            resolverFormaDoisRamos();
+        RecorrenciaDigitada digitada = (RecorrenciaDigitada) Main.lerParametro(
+                new Parametro("Digite a recorrencia: ", RecorrenciaDigitada::interpretar));
+        if (digitada.forma == RecorrenciaDigitada.FORMA_DOIS_RAMOS) {
+            int[][] ramos = digitada.fracoesDosRamos;
+            resolverFormaDoisRamos(ramos[0][0], ramos[0][1], ramos[1][0], ramos[1][1]);
+            return;
+        }
+        if (!digitada.casoBaseInformado) {
+            digitada = lerCasoBase(digitada);
+        }
+        if (digitada.forma == RecorrenciaDigitada.FORMA_SUBTRAIR) {
+            resolverFormaSubtrair(digitada.a, digitada.divisorOuDeslocamento, digitada.tipoDeCusto,
+                    digitada.coeficienteDoCusto, digitada.nDoCasoBase, digitada.valorDoCasoBase);
+            return;
+        }
+        if (digitada.nDoCasoBase != PONTO_DE_PARADA_AO_DIVIDIR) {
+            System.out.println("Para recorrencias que dividem o tamanho a parada e em n = " + PONTO_DE_PARADA_AO_DIVIDIR
+                    + " (n/b^k = " + PONTO_DE_PARADA_AO_DIVIDIR + "), pois dividindo nunca se chega a T("
+                    + digitada.nDoCasoBase + "). Usando T(" + PONTO_DE_PARADA_AO_DIVIDIR + ") = " + digitada.valorDoCasoBase + ".");
+        }
+        resolverFormaDividir(digitada.a, digitada.divisorOuDeslocamento, digitada.tipoDeCusto,
+                digitada.coeficienteDoCusto, digitada.valorDoCasoBase);
+    }
+
+    private static RecorrenciaDigitada lerCasoBase(RecorrenciaDigitada digitada) {
+        String casoBasePadrao = "T(" + digitada.nDoCasoBase + ")=" + RecorrenciaDigitada.VALOR_PADRAO_DO_CASO_BASE;
+        while (true) {
+            String texto = Main.lerLinha("Digite o caso base (ex: T(1)=1 ou T(0)=0), ou apenas Enter para usar "
+                    + casoBasePadrao + ": ").trim();
+            if (texto.isEmpty()) {
+                System.out.println("Caso base nao informado: usando " + casoBasePadrao
+                        + " (o valor do caso base nao altera o comportamento).");
+                return digitada;
+            }
+            try {
+                RecorrenciaDigitada comCasoBase = digitada.comCasoBase(texto);
+                if (!comCasoBase.casoBaseInformado) {
+                    System.out.println("Valor nao informado: usando T(" + comCasoBase.nDoCasoBase + ")="
+                            + comCasoBase.valorDoCasoBase + ".");
+                }
+                return comCasoBase;
+            } catch (IllegalArgumentException erro) {
+                System.out.println(erro.getMessage() + " Tente novamente.");
+            }
         }
     }
 
-    private static void resolverFormaDividir() {
-        int a = lerInteiro("Informe a (inteiro >= " + MENOR_VALOR_DE_A + "): ", MENOR_VALOR_DE_A);
-        int b = lerInteiro("Informe b (inteiro >= " + MENOR_VALOR_DE_B + "): ", MENOR_VALOR_DE_B);
-        int tipoDeCusto = lerTipoDeCusto();
-        int c = lerCoeficienteDoCusto();
-        int casoBase = lerValor("Informe o valor do caso base T(1): ");
+    private static void resolverFormaDividir(int a, int b, int tipoDeCusto, int c, int casoBase) {
         CustoDoPasso custo = new CustoDoPasso(tipoDeCusto, c);
 
         String logDeN = "log_" + b + "(n)";
@@ -58,92 +92,132 @@ public class ResolvedorDeRecorrencias {
         String achandoK = "n/" + b + "^k = 1  =>  " + b + "^k = n  =>  k = " + logDeN;
 
         String expoenteSimbolico = "log_" + b + "(" + a + ")";
-        String potenciaDeN = potenciaDeNComExpoenteLogaritmico(a, b);
+        String potenciaDeN = potenciaDeN("n", a, b);
         String potenciaDeNDecimal = potenciaDeNComExpoenteDecimal(a, b);
         String expoenteExplicado = "expoente " + expoenteSimbolico + " = " + expoenteDecimal(a, b);
         String aElevadoAK = (a == 1 ? "1^k = 1" : a + "^k = " + a + "^(" + logDeN + ") = " + potenciaDeN);
+        Fracao base = Fracao.inteiro(casoBase);
+        Fracao zero = Fracao.inteiro(0);
 
-        if (tipoDeCusto == CUSTO_CONSTANTE) {
-            if (a == 1) {
-                imprimirSolucao(recorrencia, expansao,
-                        prefixoAposK + multiplicar(c, "k") + "   (k parcelas iguais a " + c + ")",
-                        achandoK,
-                        emLinhas("T(n) = T(1) + " + multiplicar(c, "k") + " = " + casoBase + " + " + multiplicar(c, logDeN)),
-                        "T(n) = " + montarSoma(List.of(Fracao.inteiro(c), Fracao.inteiro(casoBase)), List.of(logDeN, ""))
-                                + "   (n potencia de " + b + ")",
-                        "Theta(log n)");
-                return;
-            }
+        String formaAposK;
+        String substituicao;
+        String comportamento;
+        List<Fracao> coeficientes;
+        if (tipoDeCusto == CUSTO_CONSTANTE && a == 1) {
+            formaAposK = prefixoAposK + multiplicar(c, "k") + "   (k parcelas iguais a " + c + ")";
+            substituicao = emLinhas("T(n) = T(1) + " + multiplicar(c, "k") + " = " + casoBase + " + " + multiplicar(c, logDeN));
+            coeficientes = List.of(zero, zero, zero, Fracao.inteiro(c), base);
+            comportamento = "Theta(log n)";
+        } else if (tipoDeCusto == CUSTO_CONSTANTE) {
             Fracao parcelaGeometrica = new Fracao(c, a - 1L);
-            imprimirSolucao(recorrencia, expansao,
-                    prefixoAposK + multiplicar(c, "(1 + " + a + " + " + a + "^2 + ... + " + a + "^(k-1))"),
-                    achandoK,
-                    emLinhas(
-                            aElevadoAK,
-                            "T(n) = " + potenciaDeN + "*T(1) + " + multiplicar(c, "(" + potenciaDeN + " - 1)/(" + a + " - 1)")),
-                    "T(n) = " + montarSoma(
-                            List.of(Fracao.inteiro(casoBase).somar(parcelaGeometrica), parcelaGeometrica.negativa()),
-                            List.of(potenciaDeN, "")) + "   (n potencia de " + b + ")",
-                    "Theta(" + potenciaDeNDecimal + ")   (" + expoenteExplicado + ")");
-            return;
-        }
-
-        Fracao razao = new Fracao(a, b);
-        String razaoTexto = razao.entreParentesesSeFracionaria();
-        if (a == b) {
-            imprimirSolucao(recorrencia, expansao,
-                    prefixoAposK + multiplicar(c, "n") + " + ... + " + multiplicar(c, "n") + "   (k parcelas)"
-                            + " = " + parteRecursivaAposK + " + " + multiplicar(c, "k*n"),
-                    achandoK,
-                    emLinhas(
-                            "razao a/b = 1: cada um dos k niveis custa " + multiplicar(c, "n"),
-                            aElevadoAK,
-                            "T(n) = n*T(1) + " + multiplicar(c, "n*" + logDeN)),
-                    "T(n) = " + montarSoma(List.of(Fracao.inteiro(c), Fracao.inteiro(casoBase)), List.of("n*" + logDeN, "n"))
-                            + "   (n potencia de " + b + ")",
-                    "Theta(n log n)");
-            return;
-        }
-
-        String formaAposK = prefixoAposK + multiplicar(c, "n*(1 + " + razaoTexto + " + " + razaoTexto + "^2 + ... + "
-                + razaoTexto + "^(k-1))");
-        Fracao fatorDaSoma = new Fracao((long) c * b, Math.abs((long) b - a));
-        String potenciaDeNNaSoma = potenciaDeN.isEmpty() ? "1" : potenciaDeN;
-        if (a < b) {
-            imprimirSolucao(recorrencia, expansao, formaAposK, achandoK,
-                    emLinhas(
-                            "razao a/b = " + razao + " < 1: soma geometrica decrescente, dominada pelo primeiro termo",
-                            aElevadoAK + "   e   " + razaoTexto + "^k = " + potenciaDeNNaSoma + "/n",
-                            "T(n) = " + coeficiente(potenciaDeNNaSoma) + "T(1) + " + termoComCoeficiente(fatorDaSoma, "(n - " + potenciaDeNNaSoma + ")")),
-                    "T(n) = " + montarSoma(
-                            List.of(fatorDaSoma, Fracao.inteiro(casoBase).subtrair(fatorDaSoma)),
-                            List.of("n", potenciaDeN)) + "   (n potencia de " + b + ")",
-                    "Theta(n)");
-            return;
-        }
-        imprimirSolucao(recorrencia, expansao, formaAposK, achandoK,
-                emLinhas(
+            formaAposK = prefixoAposK + multiplicar(c, "(1 + " + a + " + " + a + "^2 + ... + " + a + "^(k-1))");
+            substituicao = emLinhas(
+                    aElevadoAK,
+                    "T(n) = " + potenciaDeN + "*T(1) + " + multiplicar(c, "(" + potenciaDeN + " - 1)/(" + a + " - 1)"));
+            coeficientes = List.of(zero, base.somar(parcelaGeometrica), zero, zero, parcelaGeometrica.negativa());
+            comportamento = "Theta(" + potenciaDeNDecimal + ")   (" + expoenteExplicado + ")";
+        } else if (a == b) {
+            formaAposK = prefixoAposK + multiplicar(c, "n") + " + ... + " + multiplicar(c, "n") + "   (k parcelas)"
+                    + " = " + parteRecursivaAposK + " + " + multiplicar(c, "k*n");
+            substituicao = emLinhas(
+                    "razao a/b = 1: cada um dos k niveis custa " + multiplicar(c, "n"),
+                    aElevadoAK,
+                    "T(n) = n*T(1) + " + multiplicar(c, "n*" + logDeN));
+            coeficientes = List.of(Fracao.inteiro(c), zero, base, zero, zero);
+            comportamento = "Theta(n log n)";
+        } else {
+            Fracao razao = new Fracao(a, b);
+            String razaoTexto = razao.entreParentesesSeFracionaria();
+            Fracao fatorDaSoma = new Fracao((long) c * b, Math.abs((long) b - a));
+            String potenciaDeNNaSoma = potenciaDeN.isEmpty() ? "1" : potenciaDeN;
+            formaAposK = prefixoAposK + multiplicar(c, "n*(1 + " + razaoTexto + " + " + razaoTexto + "^2 + ... + "
+                    + razaoTexto + "^(k-1))");
+            if (a < b) {
+                substituicao = emLinhas(
+                        "razao a/b = " + razao + " < 1: soma geometrica decrescente, dominada pelo primeiro termo",
+                        aElevadoAK + "   e   " + razaoTexto + "^k = " + potenciaDeNNaSoma + "/n",
+                        "T(n) = " + coeficiente(potenciaDeNNaSoma) + "T(1) + "
+                                + FormaFechada.termoComCoeficiente(fatorDaSoma, "(n - " + potenciaDeNNaSoma + ")"));
+                coeficientes = List.of(zero, base.subtrair(fatorDaSoma), fatorDaSoma, zero, zero);
+                comportamento = "Theta(n)";
+            } else {
+                substituicao = emLinhas(
                         "razao a/b = " + razao + " > 1: soma geometrica crescente, dominada pelo ultimo nivel",
                         aElevadoAK + "   e   " + razaoTexto + "^k = " + potenciaDeN + "/n",
-                        "T(n) = " + potenciaDeN + "*T(1) + " + termoComCoeficiente(fatorDaSoma, "(" + potenciaDeN + " - n)")),
-                "T(n) = " + montarSoma(
-                        List.of(Fracao.inteiro(casoBase).somar(fatorDaSoma), fatorDaSoma.negativa()),
-                        List.of(potenciaDeN, "n")) + "   (n potencia de " + b + ")",
-                "Theta(" + potenciaDeNDecimal + ")   (" + expoenteExplicado + ")");
+                        "T(n) = " + potenciaDeN + "*T(1) + "
+                                + FormaFechada.termoComCoeficiente(fatorDaSoma, "(" + potenciaDeN + " - n)"));
+                coeficientes = List.of(zero, base.somar(fatorDaSoma), fatorDaSoma.negativa(), zero, zero);
+                comportamento = "Theta(" + potenciaDeNDecimal + ")   (" + expoenteExplicado + ")";
+            }
+        }
+
+        FormaFechada formaFechada = new FormaFechada(coeficientes, termosDaFormaDividir(a, b));
+        imprimirSolucao(recorrencia, expansao, formaAposK, achandoK, substituicao,
+                "T(n) = " + formaFechada.em(1) + "   (n potencia de " + b + ")",
+                inducaoDaFormaDividir(formaFechada, a, b, custo, casoBase),
+                comportamento);
     }
 
-    private static void resolverFormaSubtrair() {
-        int a = lerInteiro("Informe a (inteiro >= " + MENOR_VALOR_DE_A + "): ", MENOR_VALOR_DE_A);
-        int d = lerInteiro("Informe d (inteiro >= " + MENOR_VALOR_DE_D + "): ", MENOR_VALOR_DE_D);
-        int tipoDeCusto = lerTipoDeCusto();
-        int c = lerCoeficienteDoCusto();
-        int casoBase = lerValor("Informe o valor do caso base T(0): ");
+    private static List<IntFunction<String>> termosDaFormaDividir(int a, int b) {
+        IntFunction<String> argumento = divisor -> divisor == 1 ? "n" : "(n/" + divisor + ")";
+        IntFunction<String> logaritmo = divisor -> "log_" + b + "(" + (divisor == 1 ? "n" : "n/" + divisor) + ")";
+        List<IntFunction<String>> termos = new ArrayList<>();
+        termos.add(divisor -> argumento.apply(divisor) + "*" + logaritmo.apply(divisor));
+        termos.add(divisor -> potenciaDeN(argumento.apply(divisor), a, b));
+        termos.add(argumento);
+        termos.add(logaritmo);
+        termos.add(divisor -> "");
+        return termos;
+    }
+
+    private static String inducaoDaFormaDividir(FormaFechada formaFechada, int a, int b, CustoDoPasso custo, int casoBase) {
+        Fracao razao = new Fracao(a, b);
+        Fracao fatorA = Fracao.inteiro(a);
+        Fracao nLogN = formaFechada.coeficiente(DIVIDIR_N_LOG_N);
+        Fracao logN = formaFechada.coeficiente(DIVIDIR_LOG_N);
+        FormaFechada aposAplicarRecorrencia = formaFechada.comCoeficientes(List.of(
+                razao.multiplicar(nLogN),
+                formaFechada.coeficiente(DIVIDIR_POTENCIA_DE_N),
+                razao.multiplicar(formaFechada.coeficiente(DIVIDIR_N)).subtrair(razao.multiplicar(nLogN))
+                        .somar(custo.parteLinear()),
+                fatorA.multiplicar(logN),
+                fatorA.multiplicar(formaFechada.coeficiente(DIVIDIR_CONSTANTE)).subtrair(fatorA.multiplicar(logN))
+                        .somar(custo.parteConstante())));
+        Fracao valorNaBase = formaFechada.coeficiente(DIVIDIR_POTENCIA_DE_N)
+                .somar(formaFechada.coeficiente(DIVIDIR_N))
+                .somar(formaFechada.coeficiente(DIVIDIR_CONSTANTE));
+
+        List<String> propriedades = new ArrayList<>();
+        if (!nLogN.ehZero() || !logN.ehZero()) {
+            propriedades.add("log_" + b + "(n/" + b + ") = log_" + b + "(n) - 1");
+        }
+        String potenciaDeN = potenciaDeN("n", a, b);
+        if (!formaFechada.coeficiente(DIVIDIR_POTENCIA_DE_N).ehZero() && !potenciaDeN.isEmpty()) {
+            propriedades.add(a + "*" + potenciaDeN("(n/" + b + ")", a, b) + " = " + potenciaDeN);
+        }
+
+        return emLinhas(
+                "Seja F(n) = " + formaFechada.em(1) + "   (n potencia de " + b + ")",
+                "Base:     n = 1:  F(1) = " + valorNaBase + "  e  T(1) = " + casoBase
+                        + conferencia(valorNaBase.compararCom(Fracao.inteiro(casoBase)) == 0),
+                "Hipotese: T(m) = F(m) para toda potencia de " + b + " m < n",
+                "Passo:    T(n) = " + coeficiente(a) + "T(n/" + b + ") + " + custo.em("n")
+                        + " = " + coeficiente(a) + "[" + formaFechada.em(b) + "] + " + custo.em("n"),
+                "            = " + aposAplicarRecorrencia.em(1)
+                        + (propriedades.isEmpty() ? "" : "   (usando " + String.join(" e ", propriedades) + ")"),
+                "            = F(n)" + conferencia(aposAplicarRecorrencia.mesmosCoeficientesQue(formaFechada)));
+    }
+
+    private static void resolverFormaSubtrair(int a, int d, int tipoDeCusto, int c, int nDoCasoBase, int casoBase) {
+        String casoBaseTexto = "T(" + nDoCasoBase + ")";
         CustoDoPasso custo = new CustoDoPasso(tipoDeCusto, c);
 
-        String k = d == 1 ? "n" : "n/" + d;
-        String kEntreParenteses = d == 1 ? "n" : "(n/" + d + ")";
+        String distanciaAteABase = nDoCasoBase == 0 ? "n" : "n-" + nDoCasoBase;
+        String k = d == 1 ? distanciaAteABase : (nDoCasoBase == 0 ? "n" : "(" + distanciaAteABase + ")") + "/" + d;
+        String kEntreParenteses = k.equals("n") ? "n" : "(" + k + ")";
         String aElevadoAK = a + "^" + kEntreParenteses;
-        String recorrencia = "T(n) = " + coeficiente(a) + "T(n-" + d + ") + " + custo.em("n") + ",  T(0) = " + casoBase;
+        String recorrencia = "T(n) = " + coeficiente(a) + "T(n-" + d + ") + " + custo.em("n")
+                + ", se n > " + nDoCasoBase + ";  " + casoBaseTexto + " = " + casoBase;
         String expansao = "T(n) = " + coeficiente(a) + "[" + coeficiente(a) + "T(n-" + 2L * d + ") + "
                 + custo.em("(n-" + d + ")") + "] + " + custo.em("n")
                 + " = " + coeficiente(potencia(a, 2)) + "T(n-" + 2L * d + ") + "
@@ -151,83 +225,143 @@ public class ResolvedorDeRecorrencias {
         String kVezesD = multiplicar(d, "k");
         String ultimoDeslocamento = "(n-" + multiplicar(d, "(k-1)") + ")";
         String prefixoAposK = "T(n) = " + (a == 1 ? "" : a + "^k*") + "T(n-" + kVezesD + ") + ";
-        String achandoK = "n - " + kVezesD + " = 0  =>  k = " + k
-                + (d == 1 ? "" : "   (se " + d + " nao divide n, k = teto(n/" + d + "); o comportamento nao muda)");
+        String achandoK = "n - " + kVezesD + " = " + nDoCasoBase + "  =>  k = " + k
+                + (d == 1 ? "" : "   (se " + d + " nao divide " + distanciaAteABase
+                        + ", k = teto; o comportamento nao muda)");
+        String comportamentoExponencial = "Theta(" + a + "^" + (d == 1 ? "n" : "(n/" + d + ")") + ")";
 
-        if (tipoDeCusto == CUSTO_CONSTANTE) {
-            if (a == 1) {
-                imprimirSolucao(recorrencia, expansao,
-                        prefixoAposK + multiplicar(c, "k") + "   (k parcelas iguais a " + c + ")",
-                        achandoK,
-                        emLinhas("T(n) = T(0) + " + multiplicar(c, "k") + " = " + casoBase + " + " + multiplicar(c, kEntreParenteses)),
-                        "T(n) = " + montarSoma(List.of(new Fracao(c, d), Fracao.inteiro(casoBase)), List.of("n", "")),
-                        "Theta(n)");
-                return;
-            }
+        Fracao base = Fracao.inteiro(casoBase);
+        Fracao nBase = Fracao.inteiro(nDoCasoBase);
+        Fracao zero = Fracao.inteiro(0);
+        String formaAposK;
+        String substituicao;
+        String comportamento;
+        List<Fracao> coeficientes;
+        if (tipoDeCusto == CUSTO_CONSTANTE && a == 1) {
+            Fracao inclinacao = new Fracao(c, d);
+            formaAposK = prefixoAposK + multiplicar(c, "k") + "   (k parcelas iguais a " + c + ")";
+            substituicao = emLinhas("T(n) = " + casoBaseTexto + " + " + multiplicar(c, "k") + " = " + casoBase + " + "
+                    + multiplicar(c, kEntreParenteses));
+            coeficientes = List.of(zero, zero, inclinacao, base.subtrair(inclinacao.multiplicar(nBase)));
+            comportamento = "Theta(n)";
+        } else if (tipoDeCusto == CUSTO_CONSTANTE) {
             Fracao parcelaGeometrica = new Fracao(c, a - 1L);
-            imprimirSolucao(recorrencia, expansao,
-                    prefixoAposK + multiplicar(c, "(1 + " + a + " + " + a + "^2 + ... + " + a + "^(k-1))"),
-                    achandoK,
-                    emLinhas(
-                            "T(n) = " + a + "^k*T(0) + " + multiplicar(c, "(" + a + "^k - 1)/(" + a + " - 1)") + ",  com k = " + k,
-                            "T(n) = " + aElevadoAK + "*" + casoBase + " + " + multiplicar(c, "(" + aElevadoAK + " - 1)/" + (a - 1))),
-                    "T(n) = " + montarSoma(
-                            List.of(Fracao.inteiro(casoBase).somar(parcelaGeometrica), parcelaGeometrica.negativa()),
-                            List.of(aElevadoAK, "")),
-                    "Theta(" + aElevadoAK + ")");
-            return;
-        }
-
-        if (a == 1) {
+            formaAposK = prefixoAposK + multiplicar(c, "(1 + " + a + " + " + a + "^2 + ... + " + a + "^(k-1))");
+            substituicao = emLinhas(
+                    "T(n) = " + a + "^k*" + casoBaseTexto + " + " + multiplicar(c, "(" + a + "^k - 1)/(" + a + " - 1)")
+                            + ",  com k = " + k,
+                    "T(n) = " + aElevadoAK + "*" + casoBase + " + " + multiplicar(c, "(" + aElevadoAK + " - 1)/" + (a - 1)));
+            coeficientes = List.of(base.somar(parcelaGeometrica), zero, zero, parcelaGeometrica.negativa());
+            comportamento = comportamentoExponencial;
+        } else if (a == 1) {
+            Fracao coeficienteQuadratico = new Fracao(c, 2L * d);
+            Fracao coeficienteLinear = new Fracao(c, 2);
             String somaDosCustos = "n + (n-" + d + ") + (n-" + 2L * d + ") + ... + " + ultimoDeslocamento;
-            imprimirSolucao(recorrencia, expansao,
-                    prefixoAposK + multiplicar(c, "[" + somaDosCustos + "]"),
-                    achandoK,
-                    emLinhas(
-                            "T(n) = T(0) + " + multiplicar(c, "(k*n - " + multiplicar(d, "k*(k-1)/2)")) + ",  com k = " + k,
-                            "soma de k termos que decrescem linearmente: cerca de n^2 no total"),
-                    "T(n) = " + montarSoma(
-                            List.of(new Fracao(c, 2L * d), new Fracao(c, 2), Fracao.inteiro(casoBase)),
-                            List.of("n^2", "n", "")),
-                    "Theta(n^2)");
-            return;
+            formaAposK = prefixoAposK + multiplicar(c, "[" + somaDosCustos + "]");
+            substituicao = emLinhas(
+                    "T(n) = " + casoBaseTexto + " + " + multiplicar(c, "(k*n - " + multiplicar(d, "k*(k-1)/2)"))
+                            + ",  com k = " + k,
+                    "soma de k termos que decrescem linearmente: cerca de n^2 no total");
+            coeficientes = List.of(zero, coeficienteQuadratico, coeficienteLinear, base
+                    .subtrair(coeficienteQuadratico.multiplicar(nBase).multiplicar(nBase))
+                    .subtrair(coeficienteLinear.multiplicar(nBase)));
+            comportamento = "Theta(n^2)";
+        } else {
+            Fracao parcelaLinear = new Fracao(c, a - 1L);
+            Fracao parcelaConstante = new Fracao((long) a * c * d, 1)
+                    .dividir(Fracao.inteiro(a - 1L).multiplicar(Fracao.inteiro(a - 1L)));
+            String somaDosCustos = "n + " + a + "*(n-" + d + ") + " + a + "^2*(n-" + 2L * d + ") + ... + "
+                    + a + "^(k-1)*" + ultimoDeslocamento;
+            formaAposK = prefixoAposK + multiplicar(c, "[" + somaDosCustos + "]");
+            substituicao = emLinhas(
+                    "T(n) = " + a + "^k*" + casoBaseTexto + " + " + multiplicar(c, "[...]") + ",  com k = " + k,
+                    "o termo " + aElevadoAK + " cresce mais rapido que a parte linear e domina a soma",
+                    "T(n) = A*" + aElevadoAK + " + (alfa*n + beta), com alfa = " + parcelaLinear.negativa()
+                            + ", beta = " + parcelaConstante.negativa() + " e A = " + casoBaseTexto
+                            + " - alfa*" + nDoCasoBase + " - beta");
+            coeficientes = List.of(
+                    base.somar(parcelaLinear.multiplicar(nBase)).somar(parcelaConstante),
+                    zero, parcelaLinear.negativa(), parcelaConstante.negativa());
+            comportamento = comportamentoExponencial;
         }
 
-        Fracao parcelaLinear = new Fracao(c, a - 1L);
-        Fracao parcelaConstante = new Fracao((long) a * c * d, 1).dividir(Fracao.inteiro(a - 1L).multiplicar(Fracao.inteiro(a - 1L)));
-        String somaDosCustos = "n + " + a + "*(n-" + d + ") + " + a + "^2*(n-" + 2L * d + ") + ... + " + a + "^(k-1)*" + ultimoDeslocamento;
-        imprimirSolucao(recorrencia, expansao,
-                prefixoAposK + multiplicar(c, "[" + somaDosCustos + "]"),
-                achandoK,
-                emLinhas(
-                        "T(n) = " + a + "^k*T(0) + " + multiplicar(c, "[...]") + ",  com k = " + k,
-                        "o termo " + aElevadoAK + " cresce mais rapido que a parte linear e domina a soma",
-                        "T(n) = A*" + aElevadoAK + " + (alfa*n + beta), com alfa = " + parcelaLinear.negativa()
-                                + ", beta = " + parcelaConstante.negativa() + " e A = T(0) - beta"),
-                "T(n) = " + montarSoma(
-                        List.of(Fracao.inteiro(casoBase).somar(parcelaConstante), parcelaLinear.negativa(), parcelaConstante.negativa()),
-                        List.of(aElevadoAK, "n", "")),
-                "Theta(" + aElevadoAK + ")");
+        boolean expoenteDeslocado = nDoCasoBase % d != 0;
+        Fracao valorDaExponencialNaBase = expoenteDeslocado
+                ? Fracao.inteiro(1)
+                : new Fracao(potencia(a, nDoCasoBase / d).longValueExact(), 1);
+        List<Fracao> coeficientesFinais = new ArrayList<>(coeficientes);
+        coeficientesFinais.set(SUBTRAIR_EXPONENCIAL, coeficientes.get(SUBTRAIR_EXPONENCIAL).dividir(valorDaExponencialNaBase));
+        int deslocamentoDoExpoente = expoenteDeslocado ? nDoCasoBase : 0;
+        FormaFechada formaFechada = new FormaFechada(
+                coeficientesFinais, termosDaFormaSubtrair(a, d, deslocamentoDoExpoente));
+
+        imprimirSolucao(recorrencia, expansao, formaAposK, achandoK, substituicao,
+                "T(n) = " + formaFechada.em(0),
+                inducaoDaFormaSubtrair(formaFechada, a, d, custo, nDoCasoBase, casoBase, valorDaExponencialNaBase,
+                        deslocamentoDoExpoente),
+                comportamento);
     }
 
-    private static void resolverFormaDoisRamos() {
-        int p1 = lerInteiro("Informe p1 (numerador da primeira fracao, inteiro >= " + MENOR_TERMO_DA_FRACAO + "): ",
-                MENOR_TERMO_DA_FRACAO);
-        int q1 = lerInteiro("Informe q1 (denominador da primeira fracao, maior que " + p1 + "): ", p1 + 1);
-        int p2 = lerInteiro("Informe p2 (numerador da segunda fracao, inteiro >= " + MENOR_TERMO_DA_FRACAO + "): ",
-                MENOR_TERMO_DA_FRACAO);
-        int q2 = lerInteiro("Informe q2 (denominador da segunda fracao, maior que " + p2 + "): ", p2 + 1);
+    private static List<IntFunction<String>> termosDaFormaSubtrair(int a, int d, int deslocamentoDoExpoente) {
+        IntFunction<String> argumento = deslocamento -> deslocamento == 0 ? "n" : "(n-" + deslocamento + ")";
+        List<IntFunction<String>> termos = new ArrayList<>();
+        termos.add(deslocamento -> {
+            int deslocamentoTotal = deslocamento + deslocamentoDoExpoente;
+            String numerador = deslocamentoTotal == 0 ? "n" : "(n-" + deslocamentoTotal + ")";
+            return a + "^" + (d == 1 ? numerador : "(" + numerador + "/" + d + ")");
+        });
+        termos.add(deslocamento -> argumento.apply(deslocamento) + "^2");
+        termos.add(argumento);
+        termos.add(deslocamento -> "");
+        return termos;
+    }
 
+    private static String inducaoDaFormaSubtrair(FormaFechada formaFechada, int a, int d, CustoDoPasso custo,
+            int nDoCasoBase, int casoBase, Fracao valorDaExponencialNaBase, int deslocamentoDoExpoente) {
+        Fracao fatorA = Fracao.inteiro(a);
+        Fracao deslocamento = Fracao.inteiro(d);
+        Fracao quadratico = formaFechada.coeficiente(SUBTRAIR_N_AO_QUADRADO);
+        Fracao linear = formaFechada.coeficiente(SUBTRAIR_N);
+        FormaFechada aposAplicarRecorrencia = formaFechada.comCoeficientes(List.of(
+                formaFechada.coeficiente(SUBTRAIR_EXPONENCIAL),
+                fatorA.multiplicar(quadratico),
+                fatorA.multiplicar(linear)
+                        .subtrair(Fracao.inteiro(2L * a * d).multiplicar(quadratico))
+                        .somar(custo.parteLinear()),
+                fatorA.multiplicar(quadratico).multiplicar(deslocamento).multiplicar(deslocamento)
+                        .subtrair(fatorA.multiplicar(linear).multiplicar(deslocamento))
+                        .somar(fatorA.multiplicar(formaFechada.coeficiente(SUBTRAIR_CONSTANTE)))
+                        .somar(custo.parteConstante())));
+        Fracao nBase = Fracao.inteiro(nDoCasoBase);
+        Fracao valorNaBase = formaFechada.coeficiente(SUBTRAIR_EXPONENCIAL).multiplicar(valorDaExponencialNaBase)
+                .somar(quadratico.multiplicar(nBase).multiplicar(nBase))
+                .somar(linear.multiplicar(nBase))
+                .somar(formaFechada.coeficiente(SUBTRAIR_CONSTANTE));
+        IntFunction<String> exponencial = termosDaFormaSubtrair(a, d, deslocamentoDoExpoente).get(SUBTRAIR_EXPONENCIAL);
+        String propriedade = formaFechada.coeficiente(SUBTRAIR_EXPONENCIAL).ehZero()
+                ? ""
+                : "   (usando " + a + "*" + exponencial.apply(d) + " = " + exponencial.apply(0) + ")";
+
+        return emLinhas(
+                "Seja F(n) = " + formaFechada.em(0)
+                        + (d == 1 ? "" : "   (n = " + nDoCasoBase + " + multiplo de " + d + ")"),
+                "Base:     n = " + nDoCasoBase + ":  F(" + nDoCasoBase + ") = " + valorNaBase + "  e  T(" + nDoCasoBase
+                        + ") = " + casoBase + conferencia(valorNaBase.compararCom(Fracao.inteiro(casoBase)) == 0),
+                "Hipotese: T(m) = F(m) para " + nDoCasoBase + " <= m < n",
+                "Passo:    T(n) = " + coeficiente(a) + "T(n-" + d + ") + " + custo.em("n")
+                        + " = " + coeficiente(a) + "[" + formaFechada.em(d) + "] + " + custo.em("n"),
+                "            = " + aposAplicarRecorrencia.em(0) + propriedade,
+                "            = F(n)" + conferencia(aposAplicarRecorrencia.mesmosCoeficientesQue(formaFechada)));
+    }
+
+    private static void resolverFormaDoisRamos(int p1, int q1, int p2, int q2) {
         Fracao primeira = new Fracao(p1, q1);
         Fracao segunda = new Fracao(p2, q2);
         Fracao soma = primeira.somar(segunda);
         String recorrencia = "T(n) = T(" + primeira + "*n) + T(" + segunda + "*n) + c*n";
 
         if (!soma.ehUm()) {
-            System.out.println();
-            System.out.println("=== Resolvedor de recorrencia ===");
-            System.out.println(String.format(FORMATO_DO_ROTULO, "Recorrencia:", recorrencia));
-            System.out.println(String.format(FORMATO_DO_ROTULO, "Soma das fracoes:", primeira + " + " + segunda + " = " + soma));
+            imprimir(new String[] {"Recorrencia:", "Soma das fracoes:"}, recorrencia, primeira + " + " + segunda + " = " + soma);
             System.out.println();
             System.out.println("Esta versao so resolve o caso em que as fracoes somam 1.");
             System.out.println("Para fracoes que nao somam 1 a analise deve ser feita a mao pela soma por nivel:");
@@ -254,47 +388,51 @@ public class ResolvedorDeRecorrencias {
                         "ha entre " + ramoCurto + " e " + ramoLongo + " niveis, cada um custando no maximo c*n",
                         "c*n*" + ramoCurto + " <= T(n) <= c*n*" + ramoLongo + "  (os dois sao Theta(log n))"),
                 SEM_FORMA_FECHADA,
+                inducaoDaFormaDoisRamos(primeira, segunda, (double) p1 / q1, (double) p2 / q2),
                 "Theta(n log n)");
     }
 
-    private static void imprimirSolucao(String recorrencia, String expansao, String formaAposK, String achandoK,
-            String substituicao, String formaFechada, String comportamento) {
+    private static String inducaoDaFormaDoisRamos(Fracao primeira, Fracao segunda, double valorDaPrimeira,
+            double valorDaSegunda) {
+        double entropia = -(valorDaPrimeira * logaritmoNaBase2(valorDaPrimeira)
+                + valorDaSegunda * logaritmoNaBase2(valorDaSegunda));
+        String entropiaTexto = String.format(Locale.US, "%.2f", entropia);
+        String primeiraTexto = "(" + primeira + ")";
+        String segundaTexto = "(" + segunda + ")";
+        return emLinhas(
+                "Palpite: T(n) = Theta(n log n).  Hipotese: T(m) <= k*m*log_2(m) para m < n",
+                "T(n) <= k*" + primeiraTexto + "n*log_2(" + primeiraTexto + "n) + k*" + segundaTexto + "n*log_2("
+                        + segundaTexto + "n) + c*n",
+                "     = k*n*log_2(n) + k*n*[" + primeiraTexto + "*log_2" + primeiraTexto + " + " + segundaTexto
+                        + "*log_2" + segundaTexto + "] + c*n   (pois " + primeira + " + " + segunda + " = 1)",
+                "     = k*n*log_2(n) - " + entropiaTexto + "*k*n + c*n",
+                "    <= k*n*log_2(n)   sempre que k >= c/" + entropiaTexto + CONFERE,
+                "Limite inferior: com T(m) >= k*m*log_2(m) a mesma conta vale com >= quando k <= c/" + entropiaTexto + CONFERE,
+                "Logo T(n) = Theta(n log n)");
+    }
+
+    private static double logaritmoNaBase2(double valor) {
+        return Math.log(valor) / Math.log(2);
+    }
+
+    private static void imprimirSolucao(String... valores) {
+        imprimir(ROTULOS_DA_SOLUCAO, valores);
+    }
+
+    private static void imprimir(String[] rotulos, String... valores) {
         System.out.println();
         System.out.println("=== Resolvedor de recorrencia ===");
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Recorrencia:", recorrencia));
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Passo 1 (expansao):", expansao));
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Passo 2 (forma apos k):", formaAposK));
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Passo 3 (achar k):", achandoK));
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Passo 4 (substituir):", substituicao));
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Forma fechada:", formaFechada));
-        System.out.println(String.format(FORMATO_DO_ROTULO, "Comportamento:", comportamento));
+        for (int posicao = 0; posicao < rotulos.length; posicao++) {
+            System.out.println(String.format(FORMATO_DO_ROTULO, rotulos[posicao], valores[posicao]));
+        }
+    }
+
+    private static String conferencia(boolean confere) {
+        return confere ? CONFERE : NAO_CONFERE;
     }
 
     private static String emLinhas(String... linhas) {
         return String.join(System.lineSeparator() + RECUO_DE_CONTINUACAO, linhas);
-    }
-
-    private static int lerTipoDeCusto() {
-        System.out.println("Tipo de custo f(n):");
-        System.out.println(" " + CUSTO_CONSTANTE + " = constante c");
-        System.out.println(" " + CUSTO_LINEAR + " = linear c*n");
-        return Main.lerOpcao("Escolha o tipo de custo: ", CUSTO_CONSTANTE, CUSTO_LINEAR);
-    }
-
-    private static int lerCoeficienteDoCusto() {
-        return lerInteiro("Informe o valor de c (inteiro >= " + MENOR_VALOR_DE_C + "): ", MENOR_VALOR_DE_C);
-    }
-
-    private static int lerInteiro(String pergunta, int minimo) {
-        return lerComConversor(pergunta, Conversores.inteiroNoMinimo(minimo));
-    }
-
-    private static int lerValor(String pergunta) {
-        return lerComConversor(pergunta, Conversores.INTEIRO);
-    }
-
-    private static int lerComConversor(String pergunta, Function<String, Object> conversor) {
-        return (Integer) Main.lerParametro(new Parametro(pergunta, conversor));
     }
 
     private static String coeficiente(Object valor) {
@@ -309,48 +447,23 @@ public class ResolvedorDeRecorrencias {
         return BigInteger.valueOf(base).pow(expoente);
     }
 
-    private static String montarSoma(List<Fracao> coeficientes, List<String> termos) {
-        StringBuilder soma = new StringBuilder();
-        for (int indice = 0; indice < coeficientes.size(); indice++) {
-            Fracao coeficiente = coeficientes.get(indice);
-            if (coeficiente.ehZero()) {
-                continue;
-            }
-            if (soma.length() == 0) {
-                soma.append(coeficiente.ehNegativa() ? "-" : "");
-            } else {
-                soma.append(coeficiente.ehNegativa() ? " - " : " + ");
-            }
-            soma.append(termoComCoeficiente(coeficiente.absoluta(), termos.get(indice)));
-        }
-        return soma.length() == 0 ? "0" : soma.toString();
-    }
-
-    private static String termoComCoeficiente(Fracao coeficiente, String termo) {
-        if (termo.isEmpty()) {
-            return coeficiente.toString();
-        }
-        return coeficiente.ehUm() ? termo : coeficiente + "*" + termo;
-    }
-
-    private static String potenciaDeNComExpoenteLogaritmico(int a, int b) {
+    private static String potenciaDeN(String argumento, int a, int b) {
         int expoenteInteiro = expoenteInteiroExato(a, b);
         if (expoenteInteiro == 0) {
             return "";
         }
         if (expoenteInteiro == 1) {
-            return "n";
+            return argumento;
         }
         if (expoenteInteiro > 1) {
-            return "n^" + expoenteInteiro;
+            return argumento + "^" + expoenteInteiro;
         }
-        return "n^(log_" + b + "(" + a + "))";
+        return argumento + "^(log_" + b + "(" + a + "))";
     }
 
     private static String potenciaDeNComExpoenteDecimal(int a, int b) {
-        int expoenteInteiro = expoenteInteiroExato(a, b);
-        if (expoenteInteiro >= 0) {
-            return potenciaDeNComExpoenteLogaritmico(a, b);
+        if (expoenteInteiroExato(a, b) >= 0) {
+            return potenciaDeN("n", a, b);
         }
         return "n^" + expoenteDecimal(a, b);
     }
@@ -381,6 +494,14 @@ public class ResolvedorDeRecorrencias {
         String multiplicadoPor(long fator, String argumento) {
             long fatorTotal = fator * coeficiente;
             return tipo == CUSTO_CONSTANTE ? String.valueOf(fatorTotal) : multiplicar(fatorTotal, argumento);
+        }
+
+        Fracao parteConstante() {
+            return Fracao.inteiro(tipo == CUSTO_CONSTANTE ? coeficiente : 0);
+        }
+
+        Fracao parteLinear() {
+            return Fracao.inteiro(tipo == CUSTO_LINEAR ? coeficiente : 0);
         }
     }
 }

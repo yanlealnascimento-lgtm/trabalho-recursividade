@@ -3,20 +3,20 @@ import java.util.List;
 public class Problema {
 
     private final String nome;
-    private final List<Parametro> parametros;
-    private final Solucao solucao;
     private final String recorrencia;
     private final String solucaoDaRecorrencia;
     private final String comportamento;
+    private final Solucao solucao;
+    private final List<Parametro> parametros;
 
-    public Problema(String nome, List<Parametro> parametros, Solucao solucao,
-            String recorrencia, String solucaoDaRecorrencia, String comportamento) {
+    public Problema(String nome, String recorrencia, String solucaoDaRecorrencia, String comportamento,
+            Solucao solucao, Parametro... parametros) {
         this.nome = nome;
-        this.parametros = parametros;
-        this.solucao = solucao;
         this.recorrencia = recorrencia;
         this.solucaoDaRecorrencia = solucaoDaRecorrencia;
         this.comportamento = comportamento;
+        this.solucao = solucao;
+        this.parametros = List.of(parametros);
     }
 
     public String getNome() {
