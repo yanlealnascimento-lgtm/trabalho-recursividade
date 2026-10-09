@@ -31,8 +31,7 @@ public class ResolvedorDeRecorrencias {
 
     public static void executar() {
         System.out.println();
-        RecorrenciaDigitada digitada = (RecorrenciaDigitada) Main.lerParametro(
-                new Parametro("Digite a recorrencia: ", RecorrenciaDigitada::interpretar));
+        RecorrenciaDigitada digitada = lerRecorrencia();
         if (digitada.forma == RecorrenciaDigitada.FORMA_DOIS_RAMOS) {
             int[][] ramos = digitada.fracoesDosRamos;
             resolverFormaDoisRamos(ramos[0][0], ramos[0][1], ramos[1][0], ramos[1][1]);
@@ -53,6 +52,21 @@ public class ResolvedorDeRecorrencias {
         }
         resolverFormaDividir(digitada.a, digitada.divisorOuDeslocamento, digitada.tipoDeCusto,
                 digitada.coeficienteDoCusto, digitada.valorDoCasoBase);
+    }
+
+    private static RecorrenciaDigitada lerRecorrencia() {
+        while (true) {
+            String texto = Main.lerLinha("Digite a recorrencia: ");
+            if (texto.trim().isEmpty()) {
+                System.out.println("Nenhum valor informado. Tente novamente.");
+                continue;
+            }
+            try {
+                return RecorrenciaDigitada.interpretar(texto);
+            } catch (IllegalArgumentException erro) {
+                System.out.println(erro.getMessage() + " Tente novamente.");
+            }
+        }
     }
 
     private static RecorrenciaDigitada lerCasoBase(RecorrenciaDigitada digitada) {
